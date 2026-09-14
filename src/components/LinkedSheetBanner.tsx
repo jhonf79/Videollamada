@@ -90,26 +90,54 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
                     : 'Misma Hoja Vinculada'
                   : 'Google Sheets'}
               </span>
-              {linkedSheet?.autoSync && (
-                <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Alimentación continua activa
-                </span>
+              {currentUser ? (
+                linkedSheet?.autoSync && (
+                  <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Sincronización activa ({currentUser.email || 'Conectado'})</span>
+                  </span>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenExportDialog}
+                  className="text-[10px] font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Haz clic para conectar tu cuenta de Google en este navegador"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                  <span>Requiere conectar Google en este navegador</span>
+                </button>
               )}
             </div>
             <p className="text-xs sm:text-sm font-semibold text-slate-900 truncate mt-0.5">
               {linkedSheet ? linkedSheet.title : 'Sin hoja central vinculada todavía'}
             </p>
             <p className="text-[11px] text-slate-500">
-              {linkedSheet
-                ? 'Los registros nuevos se agregan automáticamente como filas a esta misma hoja.'
-                : 'Conecta una hoja para alimentar continuamente el mismo archivo sin duplicar hojas.'}
+              {currentUser ? (
+                'Los registros guardados se agregan automáticamente como filas a esta misma hoja.'
+              ) : (
+                <span className="text-amber-700 font-medium">
+                  ⚠️ Importante: En este navegador aún no has conectado Google. Pulsa &quot;Conectar Google&quot; para autorizar el envío a la hoja.
+                </span>
+              )}
             </p>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+          {!currentUser && (
+            <button
+              type="button"
+              onClick={onOpenExportDialog}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-950 bg-amber-200 hover:bg-amber-300 border border-amber-400 transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Conectar tu cuenta de Google para autorizar la sincronización"
+            >
+              <LinkIcon className="w-3.5 h-3.5 text-amber-900" />
+              <span>Conectar Google</span>
+            </button>
+          )}
+
           {linkedSheet ? (
             <>
               <a

@@ -25,6 +25,9 @@ provider.setCustomParameters({
   prompt: 'select_account',
 });
 
+const TOKEN_KEY = 'google_sheets_oauth_token';
+const TOKEN_EXP_KEY = 'google_sheets_oauth_token_exp';
+
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
 let cachedUser: User | null = null;
@@ -36,14 +39,19 @@ export const initAuth = (
   return onAuthStateChanged(auth, async (user: User | null) => {
     cachedUser = user;
     if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+      const token = await getAccessToken();
+      if (token) {
+        if (onAuthSuccess) onAuthSuccess(user, token);
       } else if (!isSigningIn) {
         // Token might need re-prompt if expired or fresh session
         if (onAuthFailure) onAuthFailure();
       }
     } else {
       cachedAccessToken = null;
+      try {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(TOKEN_EXP_KEY);
+      } catch (e) {}
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -60,6 +68,11 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 
     cachedAccessToken = credential.accessToken;
     cachedUser = result.user;
+    try {
+      localStorage.setItem(TOKEN_KEY, credential.accessToken);
+      localStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + 55 * 60 * 1000));
+    } catch (e) {}
+
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Error al iniciar sesión con Google:', error);
@@ -70,7 +83,16 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  return cachedAccessToken;
+  if (cachedAccessToken) return cachedAccessToken;
+  try {
+    const saved = localStorage.getItem(TOKEN_KEY);
+    const exp = localStorage.getItem(TOKEN_EXP_KEY);
+    if (saved && exp && Date.now() < Number(exp)) {
+      cachedAccessToken = saved;
+      return saved;
+    }
+  } catch (e) {}
+  return null;
 };
 
 export const getCurrentUser = (): User | null => {
@@ -81,4 +103,8 @@ export const googleLogout = async () => {
   await signOut(auth);
   cachedAccessToken = null;
   cachedUser = null;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_EXP_KEY);
+  } catch (e) {}
 };

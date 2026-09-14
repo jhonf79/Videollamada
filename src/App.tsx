@@ -77,7 +77,7 @@ export default function App() {
     const updatedRecords = saveRecord(currentRecord);
     setRecords(updatedRecords);
 
-    // If a Google Sheet is linked and auto-sync is enabled (or user is logged in):
+    // If a Google Sheet is linked and auto-sync is enabled:
     if (linkedSheet && linkedSheet.autoSync) {
       try {
         setIsAutoSyncing(true);
@@ -100,9 +100,23 @@ export default function App() {
             url: res.spreadsheetUrl,
           });
           setTimeout(() => setSyncToast(null), 5000);
+        } else {
+          // No hay token de Google en este navegador:
+          // Guardó localmente y abre el diálogo para que autorice y envíe a la hoja con 1 clic
+          setExportTargetRecord(currentRecord);
+          setGoogleExportMode('single');
+          setIsGoogleExportOpen(true);
+          setSyncToast({
+            message: 'Registro guardado localmente. Para enviarlo a Google Sheets, conecta tu cuenta de Google en este navegador.',
+          });
+          setTimeout(() => setSyncToast(null), 6000);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Auto-sync a Google Sheets:', err);
+        setSyncToast({
+          message: `Atención al sincronizar con Google Sheets: ${err?.message || 'Verifica permisos'}.`,
+        });
+        setTimeout(() => setSyncToast(null), 6000);
       } finally {
         setIsAutoSyncing(false);
       }

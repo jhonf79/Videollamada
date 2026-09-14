@@ -1,0 +1,6 @@
+{
+  "name": "Registro de Celulares y Contactos",
+  "description": "Aplicativo móvil para recopilar datos personales y listado de celulares con exportación a Hojas de cálculo de Google (Google Sheets).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

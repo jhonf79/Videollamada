@@ -159,7 +159,7 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
     }
     const updated: LinkedGoogleSheet = {
       spreadsheetId: id,
-      spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${id}/edit`,
+      spreadsheetUrl: `https://docs.google.com/spreadsheets/d/1ivg4Jb1HioFN07AY8T2WZx0VEhKR511kj6XGrWOGO_E/edit?usp=sharing`,
       title: 'Hoja de cálculo vinculada',
       lastUpdated: new Date().toISOString(),
       autoSync: true,

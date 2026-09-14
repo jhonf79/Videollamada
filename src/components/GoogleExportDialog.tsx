@@ -23,6 +23,7 @@ import {
   createMasterSpreadsheet,
   GoogleSheetExportResult,
 } from '../utils/googleSheetsExport';
+import { syncRecordViaWebhook, syncAllRecordsViaWebhook } from '../utils/googleWebhookSync';
 import { RecordData } from '../types';
 import {
   getLinkedGoogleSheet,
@@ -96,37 +97,41 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
     setLoading(true);
 
     try {
-      let token = await getAccessToken();
-      let user = currentUser;
+      const activeSheet = linkedSheet || DEFAULT_LINKED_SHEET;
 
-      if (!token || !user) {
-        const authRes = await googleSignIn();
-        token = authRes.accessToken;
-        user = authRes.user;
-        onUserChange(user);
-      }
-
-      let targetSpreadsheetId: string | undefined = undefined;
-      if (!forceNewSpreadsheet && linkedSheet?.spreadsheetId) {
-        targetSpreadsheetId = linkedSheet.spreadsheetId;
-      }
-
-      let res: GoogleSheetExportResult;
+      // 1. First attempt / fallback with Google Apps Script Webhook (Works across all browsers with NO login)
       if (mode === 'single' && record) {
-        res = await appendRecordToLinkedGoogleSheet(record, token, targetSpreadsheetId);
+        await syncRecordViaWebhook(record);
       } else if (mode === 'all' && records) {
-        res = await syncAllRecordsToLinkedGoogleSheet(records, token, targetSpreadsheetId);
-      } else {
-        throw new Error('No hay datos disponibles para enviar a Google Sheets.');
+        await syncAllRecordsViaWebhook(records);
       }
 
-      // Save as the linked sheet so all future records append to the SAME sheet
+      // 2. Also try Google Sheets REST API if already logged in or forceNewSpreadsheet requested
+      let token = await getAccessToken();
+      if (forceNewSpreadsheet || (token && currentUser)) {
+        try {
+          if (!token) {
+            const authRes = await googleSignIn();
+            token = authRes.accessToken;
+            onUserChange(authRes.user);
+          }
+          let targetSpreadsheetId: string | undefined = forceNewSpreadsheet ? undefined : activeSheet.spreadsheetId;
+          if (mode === 'single' && record) {
+            await appendRecordToLinkedGoogleSheet(record, token, targetSpreadsheetId);
+          } else if (mode === 'all' && records) {
+            await syncAllRecordsToLinkedGoogleSheet(records, token, targetSpreadsheetId);
+          }
+        } catch (authApiErr) {
+          console.warn('REST API failed, webhook sync succeeded:', authApiErr);
+        }
+      }
+
       const updatedLinkedSheet: LinkedGoogleSheet = {
-        spreadsheetId: res.spreadsheetId,
-        spreadsheetUrl: res.spreadsheetUrl,
-        title: res.title,
+        spreadsheetId: activeSheet.spreadsheetId,
+        spreadsheetUrl: activeSheet.spreadsheetUrl,
+        title: activeSheet.title,
         lastUpdated: new Date().toISOString(),
-        autoSync: linkedSheet ? linkedSheet.autoSync : true,
+        autoSync: true,
       };
 
       saveLinkedGoogleSheet(updatedLinkedSheet);
@@ -135,19 +140,21 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
         onSheetLinked(updatedLinkedSheet);
       }
 
-      setResult(res);
+      setResult({
+        spreadsheetId: activeSheet.spreadsheetId,
+        spreadsheetUrl: activeSheet.spreadsheetUrl,
+        title: activeSheet.title,
+        action: 'appended',
+      });
     } catch (err: any) {
       console.error('Error con Google Sheets:', err);
-      if (err.message?.includes('token') || err.message?.includes('401') || err.message?.includes('auth')) {
-        onUserChange(null);
-      }
       if (isUnauthorizedDomainError(err)) {
         setIsDomainError(true);
       } else {
         setIsDomainError(false);
       }
       setError(
-        err.message || 'No se pudo comunicar con Google Sheets. Verifica los permisos de tu cuenta.'
+        err.message || 'No se pudo comunicar con Google Sheets. Verifica los permisos.'
       );
     } finally {
       setLoading(false);
@@ -365,17 +372,15 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
                 </div>
               )}
 
-              {!currentUser && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2.5 text-left">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-1.5"></span>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-start gap-2.5 text-left">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5 animate-pulse"></span>
                   <div className="min-w-0">
-                    <p className="font-bold text-amber-950">Conexión requerida en este navegador</p>
-                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                      Para que los datos viajen a tu Hoja de Google desde este navegador, pulsa el botón a continuación para autorizar la conexión con Google.
+                    <p className="font-bold text-emerald-950">Sincronización Webhook Universal Activa</p>
+                    <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                      Los datos se envían a tu Hoja de Google de forma directa mediante la aplicación web de Apps Script. No requiere iniciar sesión ni verificación en este navegador.
                     </p>
                   </div>
                 </div>
-              )}
 
               {isDomainError ? (
                 <div className="bg-amber-50/95 border-2 border-amber-300 rounded-xl p-3.5 sm:p-4 text-xs space-y-3 animate-in fade-in duration-200 text-left">
@@ -472,17 +477,7 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
                       <Loader2 className="w-4 h-4 animate-spin text-white" />
                       <span>Alimentando Hoja de Cálculo...</span>
                     </>
-                  ) : !currentUser ? (
-                    <>
-                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
-                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                      </svg>
-                      <span>Conectar con Google y Alimentar Hoja</span>
-                    </>
-                  ) : linkedSheet ? (
+                  ) : (
                     <>
                       <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
                       <span>
@@ -490,11 +485,6 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
                           ? 'Alimentar Hoja de Cálculo Actual'
                           : `Sincronizar ${records?.length || 0} Registros en la Hoja`}
                       </span>
-                    </>
-                  ) : (
-                    <>
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
-                      <span>Crear y Vincular Hoja Central</span>
                     </>
                   )}
                 </button>

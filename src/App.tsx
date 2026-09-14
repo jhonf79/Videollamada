@@ -23,6 +23,7 @@ import { FileSpreadsheet, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { exportSingleRecordToExcel } from './utils/excelExport';
 import { initAuth, getCurrentUser, getAccessToken } from './utils/googleAuth';
 import { appendRecordToLinkedGoogleSheet } from './utils/googleSheetsExport';
+import { syncRecordViaWebhook } from './utils/googleWebhookSync';
 import { User } from 'firebase/auth';
 
 export default function App() {
@@ -81,42 +82,48 @@ export default function App() {
     if (linkedSheet && linkedSheet.autoSync) {
       try {
         setIsAutoSyncing(true);
+
+        // 1. Direct Webhook sync (No OAuth, no 403 error, works across any browser/device immediately)
+        const webhookPromise = syncRecordViaWebhook(currentRecord);
+
+        // 2. Also try Google Sheets REST API if a token happens to be available in this browser
         const token = await getAccessToken();
         if (token) {
-          const res = await appendRecordToLinkedGoogleSheet(currentRecord, token, linkedSheet.spreadsheetId);
-          const updated: LinkedGoogleSheet = {
-            ...linkedSheet,
-            title: res.title,
-            spreadsheetUrl: res.spreadsheetUrl,
-            lastUpdated: new Date().toISOString(),
-          };
-          saveLinkedGoogleSheet(updated);
-          setLinkedSheet(updated);
-
-          setSyncToast({
-            message: res.action === 'updated'
-              ? '¡Registro actualizado en tu Hoja de cálculo de Google!'
-              : '¡Registro guardado y agregado a tu Hoja de cálculo de Google!',
-            url: res.spreadsheetUrl,
-          });
-          setTimeout(() => setSyncToast(null), 5000);
-        } else {
-          // No hay token de Google en este navegador:
-          // Guardó localmente y abre el diálogo para que autorice y envíe a la hoja con 1 clic
-          setExportTargetRecord(currentRecord);
-          setGoogleExportMode('single');
-          setIsGoogleExportOpen(true);
-          setSyncToast({
-            message: 'Registro guardado localmente. Para enviarlo a Google Sheets, conecta tu cuenta de Google en este navegador.',
-          });
-          setTimeout(() => setSyncToast(null), 6000);
+          try {
+            const res = await appendRecordToLinkedGoogleSheet(currentRecord, token, linkedSheet.spreadsheetId);
+            const updated: LinkedGoogleSheet = {
+              ...linkedSheet,
+              title: res.title,
+              spreadsheetUrl: res.spreadsheetUrl,
+              lastUpdated: new Date().toISOString(),
+            };
+            saveLinkedGoogleSheet(updated);
+            setLinkedSheet(updated);
+          } catch (e) {
+            console.warn('REST API sync fallback, relying on Webhook:', e);
+          }
         }
+
+        await webhookPromise;
+
+        const updatedSheet: LinkedGoogleSheet = {
+          ...linkedSheet,
+          lastUpdated: new Date().toISOString(),
+        };
+        saveLinkedGoogleSheet(updatedSheet);
+        setLinkedSheet(updatedSheet);
+
+        setSyncToast({
+          message: '¡Registro guardado y sincronizado en tu Hoja de Google!',
+          url: linkedSheet.spreadsheetUrl,
+        });
+        setTimeout(() => setSyncToast(null), 5000);
       } catch (err: any) {
         console.warn('Auto-sync a Google Sheets:', err);
         setSyncToast({
-          message: `Atención al sincronizar con Google Sheets: ${err?.message || 'Verifica permisos'}.`,
+          message: 'Registro guardado localmente (no se pudo enviar a la hoja).',
         });
-        setTimeout(() => setSyncToast(null), 6000);
+        setTimeout(() => setSyncToast(null), 5000);
       } finally {
         setIsAutoSyncing(false);
       }

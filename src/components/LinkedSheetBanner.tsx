@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { FileSpreadsheet, ExternalLink, Settings, Check, RefreshCw, Link as LinkIcon } from 'lucide-react';
-import { LinkedGoogleSheet, extractSpreadsheetId, saveLinkedGoogleSheet } from '../utils/storage';
+import {
+  LinkedGoogleSheet,
+  extractSpreadsheetId,
+  saveLinkedGoogleSheet,
+  DEFAULT_LINKED_SHEET,
+  DEFAULT_SPREADSHEET_ID,
+} from '../utils/storage';
 import { User } from 'firebase/auth';
 
 interface LinkedSheetBannerProps {
@@ -44,6 +50,13 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
     setCustomInput('');
   };
 
+  const handleResetDefault = () => {
+    saveLinkedGoogleSheet(DEFAULT_LINKED_SHEET);
+    onSheetChanged(DEFAULT_LINKED_SHEET);
+    setIsEditing(false);
+    setShowUnlinkConfirm(false);
+  };
+
   const handleUnlink = () => {
     saveLinkedGoogleSheet(null);
     onSheetChanged(null);
@@ -71,7 +84,11 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/90 border border-emerald-200 px-1.5 py-0.5 rounded-full">
-                {linkedSheet ? 'Misma Hoja Vinculada' : 'Google Sheets'}
+                {linkedSheet
+                  ? linkedSheet.spreadsheetId === DEFAULT_SPREADSHEET_ID
+                    ? 'Hoja Predeterminada'
+                    : 'Misma Hoja Vinculada'
+                  : 'Google Sheets'}
               </span>
               {linkedSheet?.autoSync && (
                 <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full flex items-center gap-1">
@@ -174,6 +191,19 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
             </div>
             {editError && <p className="text-[11px] text-red-600 mt-1">{editError}</p>}
           </div>
+
+          {linkedSheet?.spreadsheetId !== DEFAULT_SPREADSHEET_ID && (
+            <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={handleResetDefault}
+                className="w-full py-1.5 px-3 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Restablecer a la Hoja Predeterminada del Sistema</span>
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-1">
             {showUnlinkConfirm ? (

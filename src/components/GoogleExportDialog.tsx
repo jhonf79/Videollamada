@@ -29,6 +29,9 @@ import {
   saveLinkedGoogleSheet,
   LinkedGoogleSheet,
   extractSpreadsheetId,
+  DEFAULT_LINKED_SHEET,
+  DEFAULT_SPREADSHEET_ID,
+  DEFAULT_SPREADSHEET_URL,
 } from '../utils/storage';
 
 interface GoogleExportDialogProps {
@@ -159,8 +162,8 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
     }
     const updated: LinkedGoogleSheet = {
       spreadsheetId: id,
-      spreadsheetUrl: `https://docs.google.com/spreadsheets/d/1ivg4Jb1HioFN07AY8T2WZx0VEhKR511kj6XGrWOGO_E/edit?usp=sharing`,
-      title: 'Hoja de cálculo vinculada',
+      spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${id}/edit`,
+      title: id === DEFAULT_SPREADSHEET_ID ? DEFAULT_LINKED_SHEET.title : 'Hoja de cálculo vinculada',
       lastUpdated: new Date().toISOString(),
       autoSync: true,
     };
@@ -170,6 +173,15 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
       onSheetLinked(updated);
     }
     setCustomInput('');
+    setShowAdvanced(false);
+  };
+
+  const handleResetToDefault = () => {
+    saveLinkedGoogleSheet(DEFAULT_LINKED_SHEET);
+    setLinkedSheet(DEFAULT_LINKED_SHEET);
+    if (onSheetLinked) {
+      onSheetLinked(DEFAULT_LINKED_SHEET);
+    }
     setShowAdvanced(false);
   };
 
@@ -321,9 +333,16 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
               {/* Target info */}
               {linkedSheet ? (
                 <div className="bg-emerald-50/80 border border-emerald-300 rounded-xl p-3 text-xs">
-                  <div className="flex items-center gap-2 text-emerald-900 font-semibold mb-1">
-                    <Layers className="w-4 h-4 text-emerald-700" />
-                    <span>Se alimentará la misma Hoja:</span>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 text-emerald-900 font-semibold">
+                      <Layers className="w-4 h-4 text-emerald-700" />
+                      <span>Se alimentará la misma Hoja:</span>
+                    </div>
+                    {linkedSheet.spreadsheetId === DEFAULT_SPREADSHEET_ID && (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                        Predeterminada
+                      </span>
+                    )}
                   </div>
                   <p className="font-bold text-slate-800 text-xs truncate">
                     {linkedSheet.title}
@@ -504,6 +523,19 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {linkedSheet?.spreadsheetId !== DEFAULT_SPREADSHEET_ID && (
+                    <div className="pt-0.5">
+                      <button
+                        type="button"
+                        onClick={handleResetToDefault}
+                        className="w-full py-1.5 px-3 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Restablecer a la Hoja Predeterminada del Sistema</span>
+                      </button>
+                    </div>
+                  )}
 
                   <div className="pt-1">
                     <button

@@ -8,18 +8,37 @@ export interface LinkedGoogleSheet {
   autoSync: boolean;
 }
 
+export const DEFAULT_SPREADSHEET_ID = '1ivg4Jb1HioFN07AY8T2WZx0VEhKR511kj6XGrWOGO_E';
+export const DEFAULT_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1ivg4Jb1HioFN07AY8T2WZx0VEhKR511kj6XGrWOGO_E/edit?usp=sharing';
+
+export const DEFAULT_LINKED_SHEET: LinkedGoogleSheet = {
+  spreadsheetId: DEFAULT_SPREADSHEET_ID,
+  spreadsheetUrl: DEFAULT_SPREADSHEET_URL,
+  title: 'Base de Datos de Celulares y PPL',
+  lastUpdated: new Date().toISOString(),
+  autoSync: true,
+};
+
 const STORAGE_KEY = 'registro_celulares_records_v1';
 const DRAFT_KEY = 'registro_celulares_current_draft';
-const LINKED_SHEET_KEY = 'registro_celulares_linked_google_sheet_v1';
+const LINKED_SHEET_KEY = 'registro_celulares_linked_google_sheet_v2';
 
-export function getLinkedGoogleSheet(): LinkedGoogleSheet | null {
+export function getLinkedGoogleSheet(): LinkedGoogleSheet {
   try {
     const raw = localStorage.getItem(LINKED_SHEET_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (!raw) {
+      localStorage.setItem(LINKED_SHEET_KEY, JSON.stringify(DEFAULT_LINKED_SHEET));
+      return DEFAULT_LINKED_SHEET;
+    }
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.spreadsheetId) {
+      return parsed;
+    }
+    return DEFAULT_LINKED_SHEET;
   } catch (e) {
     console.error('Error loading linked sheet:', e);
-    return null;
+    return DEFAULT_LINKED_SHEET;
   }
 }
 

@@ -12,8 +12,10 @@ import {
   PlusCircle,
   Layers,
   Link2,
+  ShieldAlert,
 } from 'lucide-react';
 import { User } from 'firebase/auth';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { googleSignIn, googleLogout, getAccessToken } from '../utils/googleAuth';
 import {
   appendRecordToLinkedGoogleSheet,
@@ -52,16 +54,33 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDomainError, setIsDomainError] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [result, setResult] = useState<GoogleSheetExportResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [linkedSheet, setLinkedSheet] = useState<LinkedGoogleSheet | null>(() => getLinkedGoogleSheet());
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customInput, setCustomInput] = useState('');
 
+  const isUnauthorizedDomainError = (err: any): boolean => {
+    if (!err) return false;
+    const code = err.code || '';
+    const msg = `${err.message || ''} ${err.toString ? err.toString() : ''}`.toLowerCase();
+    return (
+      code === 'auth/unauthorized-domain' ||
+      msg.includes('auth/unauthorized-domain') ||
+      msg.includes('dominio no autorizado') ||
+      msg.includes('unauthorized domain') ||
+      msg.includes('autenticación/dominio no autorizado')
+    );
+  };
+
   useEffect(() => {
     if (isOpen) {
       setLinkedSheet(getLinkedGoogleSheet());
       setError(null);
+      setIsDomainError(false);
+      setCopiedDomain(false);
       setResult(null);
     }
   }, [isOpen]);
@@ -70,6 +89,7 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
 
   const handleExecuteExport = async (forceNewSpreadsheet = false) => {
     setError(null);
+    setIsDomainError(false);
     setLoading(true);
 
     try {
@@ -117,6 +137,11 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
       console.error('Error con Google Sheets:', err);
       if (err.message?.includes('token') || err.message?.includes('401') || err.message?.includes('auth')) {
         onUserChange(null);
+      }
+      if (isUnauthorizedDomainError(err)) {
+        setIsDomainError(true);
+      } else {
+        setIsDomainError(false);
       }
       setError(
         err.message || 'No se pudo comunicar con Google Sheets. Verifica los permisos de tu cuenta.'
@@ -169,9 +194,9 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white text-slate-900 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white text-slate-900 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="bg-slate-900 text-white px-4 py-3.5 flex items-center justify-between">
+        <div className="bg-slate-900 text-white px-4 py-3.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
               <FileSpreadsheet className="w-4 h-4" />
@@ -195,7 +220,7 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           {/* Active Account Pill */}
           {currentUser && (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
@@ -321,12 +346,87 @@ export const GoogleExportDialog: React.FC<GoogleExportDialogProps> = ({
                 </div>
               )}
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                  <span>{error}</span>
+              {isDomainError ? (
+                <div className="bg-amber-50/95 border-2 border-amber-300 rounded-xl p-3.5 sm:p-4 text-xs space-y-3 animate-in fade-in duration-200 text-left">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-amber-950 text-xs sm:text-sm">
+                        Dominio no autorizado en Firebase
+                      </h4>
+                      <p className="text-amber-900/90 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
+                        Firebase bloquea el inicio de sesión desde dominios nuevos por seguridad. Para permitir que tu app en Vercel se conecte a Google Sheets, solo debes agregar este dominio a la lista autorizada en Firebase.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Dominio a copiar */}
+                  <div className="bg-white border border-amber-200 rounded-lg p-2.5 flex items-center justify-between gap-2 shadow-xs">
+                    <div className="min-w-0">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                        Dominio a registrar:
+                      </span>
+                      <span className="font-mono text-xs font-bold text-slate-900 select-all break-all">
+                        {typeof window !== 'undefined' && window.location.hostname
+                          ? window.location.hostname
+                          : 'videollamada-five.vercel.app'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const host =
+                          typeof window !== 'undefined' && window.location.hostname
+                            ? window.location.hostname
+                            : 'videollamada-five.vercel.app';
+                        navigator.clipboard.writeText(host);
+                        setCopiedDomain(true);
+                        setTimeout(() => setCopiedDomain(false), 2500);
+                      }}
+                      className="shrink-0 px-2.5 py-1.5 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs flex items-center gap-1.5 transition-colors border border-amber-300 active:scale-95"
+                    >
+                      {copiedDomain ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-700">¡Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Copiar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Pasos guiados */}
+                  <div className="bg-amber-100/70 rounded-lg p-2.5 text-[11px] text-slate-800 space-y-1">
+                    <p className="font-bold text-amber-950">Cómo autorizarlo en 1 minuto:</p>
+                    <ol className="list-decimal pl-4 space-y-1 text-slate-700 leading-snug">
+                      <li>Abre la consola de Firebase en tu proyecto (botón abajo).</li>
+                      <li>Ve a <strong>Authentication</strong> &gt; pestaña <strong>Ajustes (Settings)</strong>.</li>
+                      <li>Desplázate a <strong>Dominios autorizados (Authorized domains)</strong> y haz clic en <strong>Agregar dominio</strong>.</li>
+                      <li>Pega el dominio copiado y haz clic en <strong>Guardar</strong>.</li>
+                    </ol>
+                  </div>
+
+                  {/* Botón directo a Firebase */}
+                  <a
+                    href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    <span>Ir a Ajustes de Firebase Console</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 </div>
-              )}
+              ) : error ? (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 flex items-start gap-2 text-left">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <span className="break-words">{error}</span>
+                </div>
+              ) : null}
 
               {/* Main Action Button */}
               <div className="pt-1">

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FileSpreadsheet, ExternalLink, Settings, Check, RefreshCw, Link as LinkIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileSpreadsheet, ExternalLink, Settings, Check, RefreshCw, Link as LinkIcon, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import {
   LinkedGoogleSheet,
   extractSpreadsheetId,
@@ -7,6 +7,7 @@ import {
   DEFAULT_LINKED_SHEET,
   DEFAULT_SPREADSHEET_ID,
 } from '../utils/storage';
+import { getWebhookUrl, saveWebhookUrl, testWebhookAccessibility, DEFAULT_WEBHOOK_URL } from '../utils/googleWebhookSync';
 import { User } from 'firebase/auth';
 
 interface LinkedSheetBannerProps {
@@ -25,8 +26,38 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [customInput, setCustomInput] = useState('');
+  const [webhookInput, setWebhookInput] = useState(getWebhookUrl());
+  const [webhookTestStatus, setWebhookTestStatus] = useState<{
+    testing: boolean;
+    success?: boolean;
+    message?: string;
+  }>({ testing: false });
+  const [webhookSaved, setWebhookSaved] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+
+  useEffect(() => {
+    setWebhookInput(getWebhookUrl());
+  }, [isEditing]);
+
+  const handleSaveWebhook = () => {
+    saveWebhookUrl(webhookInput);
+    setWebhookSaved(true);
+    setTimeout(() => setWebhookSaved(false), 2500);
+  };
+
+  const handleTestWebhook = async () => {
+    setWebhookTestStatus({ testing: true });
+    const res = await testWebhookAccessibility(webhookInput);
+    setWebhookTestStatus({
+      testing: false,
+      success: res.ok,
+      message: res.message,
+    });
+    setTimeout(() => {
+      setWebhookTestStatus((prev) => ({ ...prev, message: undefined }));
+    }, 6000);
+  };
 
   const handleLinkExisting = () => {
     setEditError(null);
@@ -165,6 +196,68 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
             >
               Sincronizar ahora
             </button>
+          </div>
+
+          {/* Webhook Configuration */}
+          <div className="pt-2 border-t border-slate-200/60">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                <span>URL de Webhook (Google Apps Script):</span>
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={webhookTestStatus.testing}
+                  onClick={handleTestWebhook}
+                  className="text-[10px] text-emerald-700 hover:text-emerald-800 font-bold hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  {webhookTestStatus.testing ? 'Probando...' : 'Probar conexión'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="https://script.google.com/macros/s/.../exec"
+                value={webhookInput}
+                onChange={(e) => setWebhookInput(e.target.value)}
+                className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 font-mono text-[11px]"
+              />
+              <button
+                type="button"
+                onClick={handleSaveWebhook}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shrink-0 flex items-center gap-1 transition-colors"
+              >
+                {webhookSaved ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Guardado</span>
+                  </>
+                ) : (
+                  <span>Guardar URL</span>
+                )}
+              </button>
+            </div>
+
+            {webhookTestStatus.message && (
+              <p
+                className={`text-[11px] mt-1 flex items-center gap-1 ${
+                  webhookTestStatus.success ? 'text-emerald-700 font-semibold' : 'text-amber-700 font-semibold'
+                }`}
+              >
+                {webhookTestStatus.success ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                )}
+                <span>{webhookTestStatus.message}</span>
+              </p>
+            )}
+
+            <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+              ⚠️ Nota clave: En Google Apps Script la implementación debe configurarse con <strong>Quién tiene acceso: Cualquier usuario (Anyone)</strong> para que no exija inicio de sesión.
+            </p>
           </div>
 
           <div className="pt-2">

@@ -1,8 +1,30 @@
 import { RecordData } from '../types';
 import { formatPhoneWithCountryCode } from './phoneUtils';
 
-export const GOOGLE_APPS_SCRIPT_WEBHOOK_URL =
+export const DEFAULT_WEBHOOK_URL =
   'https://script.google.com/macros/s/AKfycbwp0g7tisVa8Os01Wx_ljaDoWoAfrxeAf5Jg-swW5gUwVhkPfO718iEmaPiRPghmbSA/exec';
+
+const WEBHOOK_STORAGE_KEY = 'google_apps_script_webhook_url_v1';
+
+export function getWebhookUrl(): string {
+  try {
+    const saved = localStorage.getItem(WEBHOOK_STORAGE_KEY);
+    if (saved && saved.trim().startsWith('https://script.google.com/')) {
+      return saved.trim();
+    }
+  } catch (e) {}
+  return DEFAULT_WEBHOOK_URL;
+}
+
+export function saveWebhookUrl(url: string): void {
+  try {
+    if (!url || !url.trim()) {
+      localStorage.removeItem(WEBHOOK_STORAGE_KEY);
+    } else {
+      localStorage.setItem(WEBHOOK_STORAGE_KEY, url.trim());
+    }
+  } catch (e) {}
+}
 
 export interface WebhookSyncPayload {
   id: string;
@@ -24,7 +46,12 @@ export interface WebhookSyncPayload {
  * Sends record to the Google Apps Script Webhook directly.
  * No OAuth or Google account login needed on any client browser.
  */
-export async function syncRecordViaWebhook(record: RecordData): Promise<{ success: boolean; error?: string }> {
+export async function syncRecordViaWebhook(
+  record: RecordData,
+  customUrl?: string
+): Promise<{ success: boolean; error?: string }> {
+  const targetUrl = customUrl || getWebhookUrl();
+
   try {
     const phones = record.celulares
       .filter((c) => c.phone && c.phone.trim().length > 0)
@@ -49,9 +76,9 @@ export async function syncRecordViaWebhook(record: RecordData): Promise<{ succes
       rawRecord: record,
     };
 
-    // Google Apps Script doPost redirects (302). Fetching with mode: 'no-cors' and text/plain
-    // ensures browsers won't block it with CORS preflight errors.
-    await fetch(GOOGLE_APPS_SCRIPT_WEBHOOK_URL, {
+    // Google Apps Script doPost redirects (302). Fetching with text/plain
+    // ensures browsers won't trigger complex preflight errors.
+    await fetch(targetUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: {
@@ -68,6 +95,45 @@ export async function syncRecordViaWebhook(record: RecordData): Promise<{ succes
 }
 
 /**
+ * Tests whether the given Webhook URL is deployed with "Anyone" access or giving 403 / redirect issues.
+ */
+export async function testWebhookAccessibility(url: string): Promise<{
+  ok: boolean;
+  status?: number;
+  message: string;
+}> {
+  try {
+    const cleanUrl = url.trim();
+    if (!cleanUrl.startsWith('https://script.google.com/macros/s/') || !cleanUrl.endsWith('/exec')) {
+      return {
+        ok: false,
+        message: 'La URL debe empezar por https://script.google.com/macros/s/ y terminar en /exec',
+      };
+    }
+
+    // Attempt a test POST
+    await fetch(cleanUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({ ping: true, date: new Date().toISOString() }),
+    });
+
+    return {
+      ok: true,
+      message: 'Petición enviada al Webhook correctamente.',
+    };
+  } catch (e: any) {
+    return {
+      ok: false,
+      message: e?.message || 'Fallo de conexión',
+    };
+  }
+}
+
+/**
  * Syncs multiple records sequentially to the Google Apps Script Webhook.
  */
 export async function syncAllRecordsViaWebhook(
@@ -78,7 +144,6 @@ export async function syncAllRecordsViaWebhook(
     for (let i = 0; i < records.length; i++) {
       if (onProgress) onProgress(i + 1, records.length);
       await syncRecordViaWebhook(records[i]);
-      // Small pause to ensure Google Sheets script does not hit write collision
       if (i < records.length - 1) {
         await new Promise((r) => setTimeout(r, 400));
       }

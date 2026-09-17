@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileSpreadsheet, ExternalLink, Settings, Check, RefreshCw, Link as LinkIcon, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { FileSpreadsheet, ExternalLink, Settings, Check, RefreshCw, Link as LinkIcon, AlertTriangle, CheckCircle2, Code } from 'lucide-react';
 import {
   LinkedGoogleSheet,
   extractSpreadsheetId,
@@ -8,6 +8,7 @@ import {
   DEFAULT_SPREADSHEET_ID,
 } from '../utils/storage';
 import { getWebhookUrl, saveWebhookUrl, testWebhookAccessibility, DEFAULT_WEBHOOK_URL } from '../utils/googleWebhookSync';
+import { AppsScriptCodeModal } from './AppsScriptCodeModal';
 import { User } from 'firebase/auth';
 
 interface LinkedSheetBannerProps {
@@ -35,6 +36,7 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
   const [webhookSaved, setWebhookSaved] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [showScriptModal, setShowScriptModal] = useState(false);
 
   useEffect(() => {
     setWebhookInput(getWebhookUrl());
@@ -138,7 +140,7 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 flex-wrap justify-end">
           {linkedSheet ? (
             <>
               <a
@@ -155,11 +157,16 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsEditing(!isEditing)}
-                className="p-1.5 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                title="Opciones de la hoja vinculada"
-                aria-label="Opciones de la hoja vinculada"
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 border shadow-xs ${
+                  isEditing
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-300'
+                }`}
+                title="Configurar Webhook y opciones de Google Sheets"
+                aria-label="Configurar Webhook y opciones de Google Sheets"
               >
-                <Settings className="w-4 h-4" />
+                <Settings className={`w-3.5 h-3.5 ${isEditing ? 'text-white' : 'text-slate-600'}`} />
+                <span>{isEditing ? 'Cerrar Ajustes' : 'Ajustes Webhook ⚙️'}</span>
               </button>
             </>
           ) : (
@@ -199,19 +206,20 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
           </div>
 
           {/* Webhook Configuration */}
-          <div className="pt-2 border-t border-slate-200/60">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
-                <span>URL de Webhook (Google Apps Script):</span>
+          <div className="pt-2.5 pb-1 px-3 bg-emerald-50/60 rounded-xl border border-emerald-200/80">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Configuración de Webhook (Google Apps Script)</span>
               </p>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   disabled={webhookTestStatus.testing}
                   onClick={handleTestWebhook}
-                  className="text-[10px] text-emerald-700 hover:text-emerald-800 font-bold hover:underline cursor-pointer disabled:opacity-50"
+                  className="text-xs text-emerald-800 hover:text-emerald-950 bg-emerald-200/80 hover:bg-emerald-200 px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors disabled:opacity-50"
                 >
-                  {webhookTestStatus.testing ? 'Probando...' : 'Probar conexión'}
+                  {webhookTestStatus.testing ? 'Probando...' : '🔍 Probar conexión'}
                 </button>
               </div>
             </div>
@@ -258,6 +266,15 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
             <p className="text-[10px] text-slate-500 mt-1 leading-tight">
               ⚠️ Nota clave: En Google Apps Script la implementación debe configurarse con <strong>Quién tiene acceso: Cualquier usuario (Anyone)</strong> para que no exija inicio de sesión.
             </p>
+
+            <button
+              type="button"
+              onClick={() => setShowScriptModal(true)}
+              className="w-full mt-2.5 py-1.5 px-3 bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+            >
+              <Code className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>📋 Ver / Copiar Código para Google Apps Script</span>
+            </button>
           </div>
 
           <div className="pt-2">
@@ -337,6 +354,12 @@ export const LinkedSheetBanner: React.FC<LinkedSheetBannerProps> = ({
           </div>
         </div>
       )}
+
+      <AppsScriptCodeModal
+        isOpen={showScriptModal}
+        onClose={() => setShowScriptModal(false)}
+        spreadsheetUrl={linkedSheet?.spreadsheetUrl}
+      />
     </div>
   );
 };

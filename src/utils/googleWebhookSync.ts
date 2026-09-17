@@ -111,7 +111,7 @@ export async function testWebhookAccessibility(url: string): Promise<{
       };
     }
 
-    // Attempt a test POST
+    // Try a standard ping
     await fetch(cleanUrl, {
       method: 'POST',
       mode: 'no-cors',
@@ -123,12 +123,12 @@ export async function testWebhookAccessibility(url: string): Promise<{
 
     return {
       ok: true,
-      message: 'Petición enviada al Webhook correctamente.',
+      message: 'Petición enviada. Si no ves filas nuevas, asegúrate de haber pegado el código en Apps Script y configurado "Cualquier usuario (Anyone)".',
     };
   } catch (e: any) {
     return {
       ok: false,
-      message: e?.message || 'Fallo de conexión',
+      message: 'Error de conexión. Verifica que el Webhook tenga acceso para "Cualquier usuario (Anyone)".',
     };
   }
 }

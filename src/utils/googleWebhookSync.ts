@@ -8,6 +8,13 @@ const WEBHOOK_STORAGE_KEY = 'google_apps_script_webhook_url_v1';
 
 export function getWebhookUrl(): string {
   try {
+    const envUrl = (import.meta as any).env?.VITE_GOOGLE_WEBHOOK_URL;
+    if (envUrl && typeof envUrl === 'string' && envUrl.trim().startsWith('https://script.google.com/')) {
+      return envUrl.trim();
+    }
+  } catch (e) {}
+
+  try {
     const saved = localStorage.getItem(WEBHOOK_STORAGE_KEY);
     if (saved && saved.trim().startsWith('https://script.google.com/')) {
       return saved.trim();

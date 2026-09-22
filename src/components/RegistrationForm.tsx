@@ -112,9 +112,12 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
 
   const updatePhoneEntry = (index: number, key: 'phone' | 'alias' | 'countryCode', value: string) => {
     let cleanedValue = value;
+    const currentItem = record.celulares[index];
+    const currentCode = key === 'countryCode' ? value : (currentItem?.countryCode || '+57');
+
     if (key === 'phone') {
-      // Allow only digits and limit to 10 characters
-      cleanedValue = value.replace(/\D/g, '').slice(0, 10);
+      const maxLen = currentCode === '+57' ? 10 : 15;
+      cleanedValue = value.replace(/\D/g, '').slice(0, maxLen);
     }
     const updated = [...record.celulares];
     updated[index] = {
@@ -127,7 +130,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     });
 
     if (key === 'phone' && invalidPhoneIndex === index) {
-      if (cleanedValue.length === 0 || cleanedValue.length === 10) {
+      const validLen = currentCode === '+57' ? 10 : (currentCode === '+595' ? 8 : 7);
+      if (cleanedValue.length === 0 || cleanedValue.length >= validLen) {
         setInvalidPhoneIndex(null);
         setValidationError(null);
       }
@@ -228,10 +232,25 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     for (let i = 0; i < record.celulares.length; i++) {
       const item = record.celulares[i];
       const phone = item.phone.trim();
-      if (phone.length > 0 && phone.length < 10) {
+      if (!phone) continue;
+
+      const code = item.countryCode || '+57';
+      if (code === '+57' && phone.length < 10) {
         return {
           isValid: false,
-          error: `El campo "${item.label}" tiene solo ${phone.length} dígitos. Debe tener exactamente 10 dígitos (o déjalo vacío si no se va a registrar).`,
+          error: `El campo "${item.label}" tiene solo ${phone.length} dígitos. Para Colombia debe tener 10 dígitos (o déjalo vacío).`,
+          invalidIndex: i,
+        };
+      } else if (code === '+595' && phone.length < 8) {
+        return {
+          isValid: false,
+          error: `El campo "${item.label}" para Paraguay debe tener al menos 8 o 9 dígitos.`,
+          invalidIndex: i,
+        };
+      } else if (phone.length < 7) {
+        return {
+          isValid: false,
+          error: `El campo "${item.label}" tiene solo ${phone.length} dígitos. Debe tener un número válido (mínimo 7 dígitos).`,
           invalidIndex: i,
         };
       }
@@ -628,9 +647,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           {/* Rows 1 through 10 */}
           <div className="divide-y divide-slate-200">
             {record.celulares.map((entry, idx) => {
+              const code = entry.countryCode || '+57';
+              const isColombia = code === '+57';
               const phoneLength = entry.phone.length;
-              const isPartiallyFilled = phoneLength > 0 && phoneLength < 10;
-              const isComplete = phoneLength === 10;
+              const minLength = isColombia ? 10 : (code === '+595' ? 8 : 7);
+              const maxLength = isColombia ? 10 : (code === '+595' ? 9 : 15);
+              const isPartiallyFilled = phoneLength > 0 && phoneLength < minLength;
+              const isComplete = phoneLength >= minLength;
               const isErrorRow = invalidPhoneIndex === idx;
 
               const phoneInputClasses = isErrorRow
@@ -664,13 +687,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         </span>
                         {isPartiallyFilled && (
                           <span className="text-[10px] font-mono font-medium text-amber-700 bg-amber-100/90 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                            Faltan {10 - phoneLength} ({phoneLength}/10)
+                            {isColombia ? `Faltan ${10 - phoneLength} (${phoneLength}/10)` : `${phoneLength} dígitos`}
                           </span>
                         )}
                         {isComplete && (
                           <span className="text-[10px] font-mono font-semibold text-emerald-700 bg-emerald-100/90 border border-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            10 dígitos
+                            {isColombia ? '10 dígitos' : `${phoneLength} dígitos`}
                           </span>
                         )}
                         {isErrorRow && (
@@ -695,13 +718,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         <select
                           value={entry.countryCode || '+57'}
                           onChange={(e) => updatePhoneEntry(idx, 'countryCode', e.target.value)}
-                          className="bg-slate-100 hover:bg-slate-200/80 border-y border-l border-r border-slate-300 text-xs font-bold text-slate-700 px-2 py-1.5 focus:outline-none cursor-pointer shrink-0 rounded-l-lg"
-                          title="Código de país"
+                          className="w-24 bg-slate-100 hover:bg-slate-200/80 border-y border-l border-r border-slate-300 text-xs font-bold text-slate-700 px-2 py-1.5 focus:outline-none cursor-pointer shrink-0 rounded-l-lg truncate"
+                          title={`Código de país (${entry.countryCode || '+57'})`}
                           aria-label={`Código de país para ${entry.label}`}
                         >
                           {COUNTRY_CODES.map((c) => (
-                            <option key={c.code} value={c.code}>
-                              {c.flag} {c.code}
+                            <option key={`${c.code}-${c.country}`} value={c.code}>
+                              {c.flag} {c.code} ({c.country})
                             </option>
                           ))}
                         </select>
@@ -710,8 +733,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                           type="tel"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          maxLength={10}
-                          placeholder="10 dígitos (ej: 3001234567)"
+                          maxLength={maxLength}
+                          placeholder={isColombia ? '10 dígitos (ej: 3001234567)' : 'Número de celular...'}
                           value={entry.phone}
                           onChange={(e) => updatePhoneEntry(idx, 'phone', e.target.value)}
                           className={`w-full px-2.5 py-1.5 text-sm font-mono border-y border-r rounded-r-lg transition-colors ${phoneInputClasses}`}
@@ -741,13 +764,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                           <select
                             value={entry.countryCode || '+57'}
                             onChange={(e) => updatePhoneEntry(idx, 'countryCode', e.target.value)}
-                            className="bg-slate-100 hover:bg-slate-200/80 border-y border-l border-r border-slate-300 text-xs font-bold text-slate-700 px-2 py-1.5 focus:outline-none cursor-pointer shrink-0 rounded-l-lg"
-                            title="Código de país"
+                            className="w-24 sm:w-28 bg-slate-100 hover:bg-slate-200/80 border-y border-l border-r border-slate-300 text-xs font-bold text-slate-700 px-2 py-1.5 focus:outline-none cursor-pointer shrink-0 rounded-l-lg truncate"
+                            title={`Código de país (${entry.countryCode || '+57'})`}
                             aria-label={`Código de país para ${entry.label}`}
                           >
                             {COUNTRY_CODES.map((c) => (
-                              <option key={c.code} value={c.code}>
-                                {c.flag} {c.code}
+                              <option key={`${c.code}-${c.country}`} value={c.code}>
+                                {c.flag} {c.code} ({c.country})
                               </option>
                             ))}
                           </select>
@@ -757,8 +780,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                               type="tel"
                               inputMode="numeric"
                               pattern="[0-9]*"
-                              maxLength={10}
-                              placeholder="10 dígitos (ej: 3001234567)"
+                              maxLength={maxLength}
+                              placeholder={isColombia ? '10 dígitos (ej: 3001234567)' : 'Número de celular...'}
                               value={entry.phone}
                               onChange={(e) => updatePhoneEntry(idx, 'phone', e.target.value)}
                               className={`w-full px-2 py-1.5 text-sm font-mono border-y border-r rounded-r-lg transition-colors pr-14 ${phoneInputClasses}`}
@@ -766,13 +789,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-1">
                               {isPartiallyFilled && (
                                 <span className="text-[10px] font-mono font-semibold text-amber-700 bg-amber-100/90 border border-amber-300 px-1 py-0.5 rounded">
-                                  {phoneLength}/10
+                                  {isColombia ? `${phoneLength}/10` : `${phoneLength}d`}
                                 </span>
                               )}
                               {isComplete && (
                                 <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-1 py-0.5 rounded flex items-center gap-0.5">
                                   <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                                  10
+                                  {isColombia ? '10' : `${phoneLength}`}
                                 </span>
                               )}
                               {isErrorRow && (

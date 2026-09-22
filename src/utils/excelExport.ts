@@ -88,10 +88,13 @@ export function exportSingleRecordToExcel(record: RecordData, fileName?: string)
     XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle Celulares');
   }
 
-  const cleanName = (record.nombre || 'Registro')
+  const fullName = `${record.nombre || ''} ${record.apellido || ''}`.trim() || 'Registro';
+  const tdPart = record.td ? `_TD_${record.td}` : '';
+  const cleanName = `${fullName}${tdPart}`
     .toLowerCase()
-    .replace(/[^a-z0-9]/gi, '_');
-  const safeFilename = fileName || `Registro_${cleanName}_${Date.now().toString().slice(-4)}.xlsx`;
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/gi, '');
+  const safeFilename = fileName || `Registro_${cleanName}.xlsx`;
 
   XLSX.writeFile(wb, safeFilename);
 }

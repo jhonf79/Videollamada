@@ -41,13 +41,13 @@ export const RecordsListModal: React.FC<RecordsListModalProps> = ({
 
   const filteredRecords = records.filter((r) => {
     const term = searchTerm.toLowerCase();
-    const fullName = `${r.nombre} ${r.apellido}`.toLowerCase();
+    const fullNameWithTd = `${r.nombre} ${r.apellido} td: ${r.td} ${r.td}`.toLowerCase();
     const pinMatch = (r.pin || '').toLowerCase().includes(term);
-    const tdMatch = (r.td || '').toLowerCase().includes(term);
+    const patioMatch = (r.patio || '').toLowerCase().includes(term);
     const phoneMatch = r.celulares.some(
       (c) => c.phone.includes(term) || c.alias.toLowerCase().includes(term)
     );
-    return fullName.includes(term) || pinMatch || tdMatch || phoneMatch;
+    return fullNameWithTd.includes(term) || pinMatch || patioMatch || phoneMatch;
   });
 
   const handleExportAll = () => {
@@ -145,19 +145,26 @@ export const RecordsListModal: React.FC<RecordsListModalProps> = ({
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-sm text-slate-900 truncate">
-                        {rec.nombre || rec.apellido
-                          ? `${rec.nombre} ${rec.apellido}`.trim()
-                          : '(Sin nombre)'}
-                      </h3>
-                      {rec.td && (
-                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          TD: {rec.td}
+                      <h3 className="font-bold text-sm text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>
+                          {rec.nombre || rec.apellido
+                            ? `${rec.nombre} ${rec.apellido}`.trim()
+                            : '(Sin nombre)'}
                         </span>
-                      )}
+                        {rec.td && (
+                          <span className="text-slate-800 font-extrabold bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-200 text-xs">
+                            TD: {rec.td}
+                          </span>
+                        )}
+                      </h3>
                       {rec.pin && (
                         <span className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-0.5">
                           <Hash className="w-3 h-3" /> {rec.pin}
+                        </span>
+                      )}
+                      {rec.patio && (
+                        <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                          Patio: {rec.patio}
                         </span>
                       )}
                     </div>
